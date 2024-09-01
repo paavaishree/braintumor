@@ -1,0 +1,213 @@
+# imports
+import warnings
+warnings.filterwarnings("ignore")
+import numpy as np
+import pandas as pd
+
+from glob import glob
+from PIL import Image
+import cv2
+from tqdm.auto import tqdm
+
+import os
+from tqdm import tqdm
+import os
+import shutil
+import itertools
+import imutils
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay,classification_report
+
+  #from google.colab import drive
+#drive.mount('/content/gdrive')
+
+  TRAIN_DIR = IMG_PATH+'/Train/'
+TEST_DIR = IMG_PATH+'/Test/'
+  TRAIN_DIR = IMG_PATH+'/Train/'
+TEST_DIR = IMG_PATH+'/Test/'
+  for file in os.listdir(TEST_DIR):
+  #print(file)
+  img = Image.open(TEST_DIR+file).convert('L')
+  img = img.resize([width, height])
+  img = np.array(img)
+  img = img.reshape(1, -1)
+  Te = np.vstack([Te, img])
+  if file[0]=='Y':
+    Tes_la.append(i)
+  else:
+    Tes_la.append(j)
+
+
+Tra_la=np.array(Tra_la)
+Tes_la=np.array(Tes_la)
+
+train_image_count = len(Tra)
+print("Number of train images = ", train_image_count)
+
+test_image_count = len(Te)
+print("Number of test images = ", test_image_count)
+
+train = np.array(Tra)
+test = np.array(Te)
+train_label = np.array(Tra_la)
+test_label = np.array(Tes_la)
+
+print('Training labels', Tra_la)
+print('Testing labels', Tes_la)
+
+columns = [f'pixel_{i}' for i in range(width * height)]
+train_data = pd.DataFrame(Tra, columns=columns)
+train_data['label'] = Tra_la
+
+test_data = pd.DataFrame(Te, columns=columns)
+test_data['label'] = Tes_la
+
+train_data.shape
+
+s=train_data.iloc[0].values
+s.shape
+
+s = s.reshape(-1, 1)
+s.shape
+
+import random
+
+# Retrieve the pixel values and labels from the data variable
+
+X_train = train_data.iloc[:, :-1].values
+
+X_label = train_data.iloc[:, -1].values
+
+# Reshape the pixel values back into image dimensions
+X_train = X_train.reshape(-1, height, width)
+
+print('Train', X_train.shape)
+
+# Retrieve the pixel values and labels from the data variable
+
+Y_test = test_data.iloc[:, :-1].values
+
+Y_label = test_data.iloc[:, -1].values
+
+# Reshape the pixel values back into image dimensions
+Y_test = Y_test.reshape(-1, height, width)
+
+print('Test', Y_test.shape)
+print(X_train[0].shape)
+
+# Generate 20 random indices for image selection
+num_images = 20
+random_indices = random.sample(range(len(X_train)), num_images)
+
+# Display the random images
+fig, axes = plt.subplots(4, 5, figsize=(15, 12))
+
+for i, index in enumerate(random_indices):
+    row = i // 5
+    col = i % 5
+    axes[row, col].imshow(X_train[index], cmap='gray')
+    axes[row, col].set_title(f"Label: {X_label[index]}")
+    axes[row, col].axis('off')
+
+plt.tight_layout()
+plt.show()
+
+X_train = X_train.reshape(-1, 256,256, 1)
+Y_test = Y_test.reshape(-1, 256,256, 1)
+
+print(X_train.shape)
+print(Y_test.shape)
+
+X_train = X_train.astype('float32')
+Y_test = Y_test.astype('float32')
+X_train = X_train / 255
+Y_test = Y_test / 255
+
+from keras.utils import to_categorical
+
+train_Y_one_hot = to_categorical(X_label)
+test_Y_one_hot = to_categorical(Y_label)
+
+train_Y_one_hot.shape
+
+### Creating the CNN Model
+
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from keras.layers import Input, Dense, InputLayer, Flatten, Conv2D, MaxPooling2D, Dropout
+from keras.models import Model, Sequential
+from keras import metrics
+
+model_CNN = Sequential()
+model_CNN.add(InputLayer(input_shape=(256,256,1)))
+
+model_CNN.add(Conv2D(filters=32, kernel_size=(5,5), activation='relu'))
+model_CNN.add(MaxPooling2D(pool_size=(2,2)))
+model_CNN.add(Dropout(0.25))
+
+model_CNN.add(Conv2D(filters=64, kernel_size=(4,4), activation='relu'))
+model_CNN.add(MaxPooling2D(pool_size=(2,2)))
+model_CNN.add(Dropout(0.25))
+
+model_CNN.add(Conv2D(filters=128, kernel_size=(3,3), activation='relu'))
+model_CNN.add(MaxPooling2D(pool_size=(2,2)))
+model_CNN.add(Dropout(0.25))
+
+model_CNN.add(Conv2D(filters=256, kernel_size=(2,2), activation='relu'))
+model_CNN.add(MaxPooling2D(pool_size=(2,2)))
+model_CNN.add(Dropout(0.25))
+
+model_CNN.add(Flatten())
+model_CNN.add(Dense(2048, activation='relu'))
+model_CNN.add(Dropout(0.25))
+
+model_CNN.add(Dense(2, activation='softmax'))
+
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.99)
+model_CNN.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+
+model_CNN.summary()
+
+H = model_CNN.fit(X_train, train_Y_one_hot, batch_size=64, epochs=100)
+
+plt.style.use("ggplot")
+plt.figure()
+plt.plot(np.arange(0, len(H.history["loss"])), H.history["loss"], label="train_loss")
+plt.plot(np.arange(0, len(H.history["accuracy"])), H.history["accuracy"], label="train_acc")
+plt.title("Training Loss and Accuracy")
+plt.xlabel("Epoch #")
+plt.ylabel("Loss/Accuracy")
+plt.legend()
+
+test_loss, test_acc = model_CNN.evaluate(Y_test, test_Y_one_hot)
+print('Test loss', test_loss)
+print('Test accuracy', test_acc)
+
+predictions = model_CNN.predict(Y_test)
+print(np.argmax(np.round(predictions[0])))
+plt.imshow(Y_test[0].reshape(256, 256))
+plt.show()
+
+predictions
+
+te_pred=[]
+for i in range(15):
+  te_pred.append(np.argmax(np.round(predictions[i])))
+te_pred=np.array(te_pred)
+te_pred
+
+Tes_la
+
+labels=["No Tumour ","Tumour detected"]
+cm=confusion_matrix(te_pred,Tes_la)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm,display_labels=labels)
+disp.plot()
+
+  print(classification_report(te_pred,Tes_la))
+
+
+
+  
